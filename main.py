@@ -242,12 +242,12 @@ def forward_to_admin(message):
         else:
             username_text = "🔗 Юзернейм: отсутствует"
 
-        info_text = (
-            f"📩 **Новая анонимная предложка!**\n\n"
-            f"👤 Ник/Имя: {full_name}\n"
-            f"{username_text}\n"
-            f"🆔 ID: `{message.from_user.id}`"
-        )
+        info_text = f"""📩 **Новая анонимная предложка!**
+
+👤 Ник/Имя: {full_name}
+{username_text}
+🆔 ID: `{message.from_user.id}`"""
+
         bot.send_message(MY_ADMIN_ID, info_text, parse_mode="Markdown")
         sent_msg = bot.copy_message(chat_id=MY_ADMIN_ID, from_chat_id=message.chat.id, message_id=message.message_id)
         messages_db[sent_msg.message_id] = message.from_user.id
@@ -259,7 +259,7 @@ def forward_to_admin(message):
 if __name__ == "__main__":
     if os.path.exists(SLEEP_FILE):
         os.remove(SLEEP_FILE)
-    print("Бот 'TikTok + Поиск Музыки + Предложка' успешно запущен...")
+    print("Бот 'TikTok + Поиск Музыки + Predlozhka' успешно запущен...")
 
-    # infinity_polling работает бесконечно и сам перезапускается при внутренних сбоях сети телеграма
+    # Исправленный бесконечный опрос серверов Telegram
     bot.infinity_polling()
