@@ -384,7 +384,7 @@ def handle_tiktok(message):
     if video_path and os.path.exists(video_path):
         try:
             with open(video_path, 'rb') as video_file:
-                bot.send_video(chat_id=message.chat.id, video=video_file, caption="<3 Держи видосик",
+                bot.send_video(chat_id=message.chat.id, video=video_file, caption="😁 Держи видосик",
                                reply_to_message_id=message.message_id)
         except Exception as e:
             bot.send_message(message.chat.id, "❌ Не удалось отправить видео.")
