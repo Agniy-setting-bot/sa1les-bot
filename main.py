@@ -6,6 +6,8 @@ import telebot
 from telebot import types
 import yt_dlp
 from PIL import Image  # Библиотека для обрезки картинок
+import threading  # Для запуска веб-сервера в фоне
+from http.server import SimpleHTTPRequestHandler, HTTPServer  # Встроенный веб-сервер
 
 # --- НАСТРОЙКИ ---
 MY_ADMIN_ID = 6647613921  # Твой Telegram ID
@@ -261,7 +263,7 @@ def send_welcome(message):
         "✨ Нажимай на кнопки внизу, чтобы затестить новые функции, послушать мои рекомендации или получить случайный файл из папки мемов!"
     )
 
-    # Проверяем, залил ли ты файл welcome.jpg на сервер
+    # Проверяем, залил ли ты файл welcome.jpg на server
     if os.path.exists(WELCOME_PHOTO_FILE):
         try:
             with open(WELCOME_PHOTO_FILE, 'rb') as photo:
@@ -405,7 +407,7 @@ def forward_to_admin(message):
     if message.from_user.id == MY_ADMIN_ID: return
 
     if message.text == "✍️ Написать анонимно":
-        bot.send_message(message.chat.id, "Отлично! Отправь мне текст или медиафайл прямо сейчас 👇")
+        bot.send_message(message.chat.id, "Отлично! Отправь мне text или медиафайл прямо сейчас 👇")
         return
 
     try:
@@ -424,7 +426,22 @@ def forward_to_admin(message):
         print(f"Ошибка предложки: {e}")
 
 
+def run_dummy_server():
+    """Запуск простейшего веб-сервера для Render, чтобы он не закрывал порт"""
+    port = int(os.getenv("PORT", 10000))
+    server_address = ("", port)
+    httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
+    print(f"Фоновый веб-сервер успешно запущен на порту {port}")
+    httpd.serve_forever()
+
+
 if __name__ == "__main__":
-    if os.path.exists(SLEEP_FILE): os.remove(SLEEP_FILE)
+    if os.path.exists(SLEEP_FILE):
+        os.remove(SLEEP_FILE)
+
+    # 1. Запускаем заглушку сервера в отдельном потоке
+    threading.Thread(target=run_dummy_server, daemon=True).start()
+
+    # 2. Запускаем основного бота
     print("Бот успешно запущен! Проверяй 'Смефняфку или милоту' и команду /start.")
     bot.infinity_polling(skip_pending=True)
