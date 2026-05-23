@@ -7,14 +7,13 @@ from telebot import types
 import yt_dlp
 from PIL import Image  # Библиотека для обрезки картинок
 import threading  # Для запуска веб-сервера в фоне
-from http.server import SimpleHTTPRequestHandler, HTTPServer  # Встроенный веб-сервер
+from http.server import BaseHTTPRequestHandler, HTTPServer  # Безопасный сервер без вывода папок
 
 # --- НАСТРОЙКИ ---
 MY_ADMIN_ID = 6647613921  # Твой Telegram ID
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    BOT_TOKEN = '8889472880:AAGUFuHkBTPN6AIti1Kmy7PyPtjsjRbguo8'
+# Безопасное получение токена: если на Render переменная не задана, берем запасной вариант
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8889472880:AAGUFuHkBTPN6AIti1Kmy7PyPtjsjRbguo8")
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -24,7 +23,7 @@ LENADILDO_DIR = "lenadildo"  # ПАПКА ДЛЯ ВИДЕО ЛЕНАДИЛДО
 
 # Имя файла для твоей личной рекомендации (положи этот MP3 файл в папку с ботом)
 MY_TRACK_FILE = "my_recommendation.mp3"
-WELCOME_PHOTO_FILE = "welcome.jpg"  # Приветственная картинка (эпичный король с молниями)
+WELCOME_PHOTO_FILE = "welcome.jpg"  # Приветственная картинка
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 os.makedirs(MEMES_DIR, exist_ok=True)
@@ -150,7 +149,7 @@ def get_streaming_links(youtube_url: str) -> str:
 
 
 def process_send_meme(chat_id, reply_to_id=None):
-    """Берет случайный файл из папки 'memes' (автоматически определяет видео или фото)"""
+    """Берет случайный файл из папки 'memes'"""
     try:
         if not os.path.exists(MEMES_DIR):
             os.makedirs(MEMES_DIR, exist_ok=True)
@@ -166,7 +165,6 @@ def process_send_meme(chat_id, reply_to_id=None):
         file_path = os.path.join(MEMES_DIR, random_file_name)
         ext = os.path.splitext(random_file_name)[1].lower()
 
-        # Бот проверяет расширение файла: видео отправляет как видео, картинки — как фото
         if ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm']:
             bot.send_chat_action(chat_id, 'upload_video')
             with open(file_path, 'rb') as video:
@@ -182,7 +180,7 @@ def process_send_meme(chat_id, reply_to_id=None):
 
 
 def process_send_lenadildo(chat_id, reply_to_id=None):
-    """Функция отправки случайного видео из папки lenadildo БЕЗ текста подписи"""
+    """Функция отправки случайного видео из папки lenadildo"""
     bot.send_chat_action(chat_id, 'upload_video')
     try:
         if not os.path.exists(LENADILDO_DIR):
@@ -246,7 +244,6 @@ def send_welcome(message):
         bot.send_message(MY_ADMIN_ID, "Привет, admin! Бот запущен.")
         return
 
-    # Настраиваем кнопки клавиатуры
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     btn_suggest = types.KeyboardButton("✍️ Написать анонимно")
     btn_music = types.KeyboardButton("🎵 Найти песню")
@@ -263,7 +260,6 @@ def send_welcome(message):
         "✨ Нажимай на кнопки внизу, чтобы затестить новые функции, послушать мои рекомендации или получить случайный файл из папки мемов!"
     )
 
-    # Проверяем, залил ли ты файл welcome.jpg на server
     if os.path.exists(WELCOME_PHOTO_FILE):
         try:
             with open(WELCOME_PHOTO_FILE, 'rb') as photo:
@@ -278,11 +274,9 @@ def send_welcome(message):
             print(f"Ошибка при отправке welcome.jpg: {e}")
             bot.send_message(message.chat.id, welcome_text, parse_mode="Markdown", reply_markup=markup)
     else:
-        # Если картинки нет, бот шлет просто текст с кнопками (чтобы не упал)
         bot.send_message(message.chat.id, welcome_text, parse_mode="Markdown", reply_markup=markup)
 
 
-# Обработка кликов по кнопкам меню
 @bot.message_handler(
     func=lambda message: message.text in ["🤪 Смефняфка или милота", "🍆 Ленадилдо", "🔥 Мой рекомендованный трек"])
 def handle_menu_buttons(message):
@@ -426,11 +420,27 @@ def forward_to_admin(message):
         print(f"Ошибка предложки: {e}")
 
 
+# --- БЕЗОПАСНЫЙ ВЕБ-СЕРВЕР ---
+class SafeHandler(BaseHTTPRequestHandler):
+    """Этот обработчик отвечает заглушкой 'OK' вместо вывода списка файлов"""
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html; charset=utf-8")
+        self.end_headers()
+        # Вместо списка файлов юзер увидит просто красивую плашку
+        self.wfile.write("<h1>Бот успешно работает! Проверка портов пройдена.</h1>".encode("utf-8"))
+
+    def log_message(self, format, *args):
+        # Отключаем лишний спам логов сервера в консоль Render
+        return
+
+
 def run_dummy_server():
-    """Запуск простейшего веб-сервера для Render, чтобы он не закрывал порт"""
+    """Запуск скрытого веб-сервера для Render, чтобы он не закрывал порт"""
     port = int(os.getenv("PORT", 10000))
     server_address = ("", port)
-    httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
+    httpd = HTTPServer(server_address, SafeHandler)
     print(f"Фоновый веб-сервер успешно запущен на порту {port}")
     httpd.serve_forever()
 
