@@ -1,33 +1,27 @@
 import os
 import time
-import random  # Библиотека для случайного выбора
 import requests
 import telebot
 from telebot import types
 import yt_dlp
 from PIL import Image  # Библиотека для обрезки картинок
 import threading  # Для запуска веб-сервера в фоне
-from http.server import BaseHTTPRequestHandler, HTTPServer  # Безопасный сервер без вывода папок
+from http.server import BaseHTTPRequestHandler, HTTPServer  # Безопасный сервер
 
 # --- НАСТРОЙКИ ---
 MY_ADMIN_ID = 6647613921  # Твой Telegram ID
 
-# Безопасное получение токена: если на Render переменная не задана, берем запасной вариант
+# Безопасное получение токена
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8889472880:AAGUFuHkBTPN6AIti1Kmy7PyPtjsjRbguo8")
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
 DOWNLOAD_DIR = "downloads"
-MEMES_DIR = "memes"  # ВСЁ СМЕШНОЕ И МИЛОЕ КИДАЙ СЮДА
-LENADILDO_DIR = "lenadildo"  # ПАПКА ДЛЯ ВИДЕО ЛЕНАДИЛДО
-
-# Имя файла для твоей личной рекомендации (положи этот MP3 файл в папку с ботом)
+# Личные файлы рекомендаций
 MY_TRACK_FILE = "my_recommendation.mp3"
 WELCOME_PHOTO_FILE = "welcome.jpg"  # Приветственная картинка
 
 os.makedirs(DOWNLOAD_DIR, exist_ok=True)
-os.makedirs(MEMES_DIR, exist_ok=True)
-os.makedirs(LENADILDO_DIR, exist_ok=True)
 
 messages_db = {}
 SLEEP_FILE = "sleep_mode.txt"
@@ -148,59 +142,20 @@ def get_streaming_links(youtube_url: str) -> str:
     return ""
 
 
-def process_send_meme(chat_id, reply_to_id=None):
-    """Берет случайный файл из папки 'memes'"""
+def process_send_cat(chat_id, reply_to_id=None):
+    """Получает случайного котика из публичного API и отправляет пользователю"""
+    bot.send_chat_action(chat_id, 'upload_photo')
     try:
-        if not os.path.exists(MEMES_DIR):
-            os.makedirs(MEMES_DIR, exist_ok=True)
-
-        all_files = [f for f in os.listdir(MEMES_DIR) if
-                     os.path.isfile(os.path.join(MEMES_DIR, f)) and not f.startswith('.')]
-
-        if not all_files:
-            bot.send_message(chat_id, "📁 Папка `memes` пока пуста. Загрузи туда файлы!")
-            return
-
-        random_file_name = random.choice(all_files)
-        file_path = os.path.join(MEMES_DIR, random_file_name)
-        ext = os.path.splitext(random_file_name)[1].lower()
-
-        if ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm']:
-            bot.send_chat_action(chat_id, 'upload_video')
-            with open(file_path, 'rb') as video:
-                bot.send_video(chat_id=chat_id, video=video, reply_to_message_id=reply_to_id)
+        response = requests.get("https://api.thecatapi.com/v1/images/search", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            cat_url = data[0]['url']
+            bot.send_photo(chat_id=chat_id, photo=cat_url, caption="🐾 Вот Вам милый котик!", reply_to_message_id=reply_to_id)
         else:
-            bot.send_chat_action(chat_id, 'upload_photo')
-            with open(file_path, 'rb') as photo:
-                bot.send_photo(chat_id=chat_id, photo=photo, reply_to_message_id=reply_to_id)
-
+            bot.send_message(chat_id, "❌ Не удалось поймать котика, попробуйте еще раз позже!")
     except Exception as e:
-        bot.send_message(chat_id, "❌ Произошла ошибка при отправке медиафайла.")
-        print(f"Ошибка отправки мема: {e}")
-
-
-def process_send_lenadildo(chat_id, reply_to_id=None):
-    """Функция отправки случайного видео из папки lenadildo"""
-    bot.send_chat_action(chat_id, 'upload_video')
-    try:
-        if not os.path.exists(LENADILDO_DIR):
-            os.makedirs(LENADILDO_DIR, exist_ok=True)
-
-        all_videos = [f for f in os.listdir(LENADILDO_DIR) if
-                      os.path.isfile(os.path.join(LENADILDO_DIR, f)) and not f.startswith('.')]
-
-        if not all_videos:
-            bot.send_message(chat_id, f"📁 Папка lenadildo пуста.")
-            return
-
-        random_video_name = random.choice(all_videos)
-        video_path = os.path.join(LENADILDO_DIR, random_video_name)
-
-        with open(video_path, 'rb') as video:
-            bot.send_video(chat_id=chat_id, video=video, reply_to_message_id=reply_to_id)
-    except Exception as e:
-        bot.send_message(chat_id, "❌ Произошла ошибка при чтении папки lenadildo.")
-        print(f"Ошибка lenadildo: {e}")
+        bot.send_message(chat_id, "❌ Произошла ошибка при поиске котика.")
+        print(f"Ошибка отправки котика: {e}")
 
 
 def process_send_recommended_track(chat_id, reply_to_id=None):
@@ -216,7 +171,7 @@ def process_send_recommended_track(chat_id, reply_to_id=None):
             bot.send_audio(
                 chat_id=chat_id,
                 audio=audio,
-                caption="🔥 **Рекомендация от создателя бота! Обязательно к прослушиванию.**",
+                caption="🔥 **Рекомендация от Вашего Величества! Обязательно к прослушиванию.**",
                 parse_mode="Markdown",
                 reply_to_message_id=reply_to_id
             )
@@ -233,32 +188,30 @@ def echo_sleeping(message):
         if message.text == "/start":
             if os.path.exists(SLEEP_FILE):
                 os.remove(SLEEP_FILE)
-            bot.send_message(MY_ADMIN_ID, "☀️ Бот проснулся и готов к работе!")
+            bot.send_message(MY_ADMIN_ID, "☀️ Ваше Величество, бот проснулся и готов к Вашим услугам!")
             return
-    bot.send_message(message.chat.id, "💤 **Бот сейчас спит так же, как и его автор.**", parse_mode="Markdown")
+    bot.send_message(message.chat.id, "💤 **Бот сейчас спит так же, как и его создатель.**", parse_mode="Markdown")
 
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    if message.from_user.id == MY_ADMIN_ID:
-        bot.send_message(MY_ADMIN_ID, "Привет, admin! Бот запущен.")
-        return
-
+    # Создаем клавиатуру в любом случае (и для админа, и для юзеров)
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     btn_suggest = types.KeyboardButton("✍️ Написать анонимно")
     btn_music = types.KeyboardButton("🎵 Найти песню")
     btn_my_track = types.KeyboardButton("🔥 Мой рекомендованный трек")
-    btn_meme = types.KeyboardButton("🤪 Смефняфка или милота")
-    btn_lenadildo = types.KeyboardButton("🍆 Ленадилдо")
+    btn_cat = types.KeyboardButton("🐱 Котики")
 
     markup.add(btn_suggest, btn_music)
-    markup.add(btn_my_track)
-    markup.add(btn_meme, btn_lenadildo)
+    markup.add(btn_my_track, btn_cat)
 
-    welcome_text = (
-        "🤫 **Привет! Это твой личный бот-помощник.**\n\n"
-        "✨ Нажимай на кнопки внизу, чтобы затестить новые функции, послушать мои рекомендации или получить случайный файл из папки мемов!"
-    )
+    if message.from_user.id == MY_ADMIN_ID:
+        welcome_text = "👑 **Приветствую Вас, Ваше Величество!** Бот запущен и полностью подчиняется Вашей воле. Вы также можете использовать кнопки ниже 👇"
+    else:
+        welcome_text = (
+            "🤫 **Привет! Это твой личный бот-помощник.**\n\n"
+            "✨ Нажимай на кнопки внизу, чтобы затестить новые функции, послушать мои рекомендации или получить милого котика!"
+        )
 
     if os.path.exists(WELCOME_PHOTO_FILE):
         try:
@@ -277,20 +230,20 @@ def send_welcome(message):
         bot.send_message(message.chat.id, welcome_text, parse_mode="Markdown", reply_markup=markup)
 
 
-@bot.message_handler(
-    func=lambda message: message.text in ["🤪 Смефняфка или милота", "🍆 Ленадилдо", "🔥 Мой рекомендованный трек"])
+@bot.message_handler(func=lambda message: message.text in ["🐱 Котики", "🔥 Мой рекомендованный трек"])
 def handle_menu_buttons(message):
-    if message.text == "🤪 Смефняфка или милота":
-        process_send_meme(message.chat.id, message.message_id)
-    elif message.text == "🍆 Ленадилдо":
-        process_send_lenadildo(message.chat.id, message.message_id)
+    if message.text == "🐱 Котики":
+        process_send_cat(message.chat.id, message.message_id)
     elif message.text == "🔥 Мой рекомендованный трек":
         process_send_recommended_track(message.chat.id, message.message_id)
 
 
 @bot.message_handler(func=lambda message: message.text == "🎵 Найти песню")
 def ask_for_track(message):
-    msg = bot.send_message(message.chat.id, "Введите название трека или исполнителя:", parse_mode="Markdown")
+    if message.from_user.id == MY_ADMIN_ID:
+        msg = bot.send_message(message.chat.id, "Какую песню желаете найти, Ваше Величество?", parse_mode="Markdown")
+    else:
+        msg = bot.send_message(message.chat.id, "Введите название трека или исполнителя:", parse_mode="Markdown")
     bot.register_next_step_handler(msg, process_track_search)
 
 
@@ -305,7 +258,7 @@ def process_track_search(message):
     if message.text == "✍️ Написать анонимно":
         forward_to_admin(message)
         return
-    elif message.text in ["🤪 Смефняфка или милота", "🍆 Ленадилдо", "🔥 Мой рекомендованный трек"]:
+    elif message.text in ["🐱 Котики", "🔥 Мой рекомендованный трек"]:
         handle_menu_buttons(message)
         return
     elif message.text == "🎵 Найти песню":
@@ -366,7 +319,7 @@ def handle_admin_reply(message):
         original_user_id = messages_db[reply_id]
         try:
             bot.copy_message(chat_id=original_user_id, from_chat_id=message.chat.id, message_id=message.message_id)
-            bot.send_message(MY_ADMIN_ID, "✅ Ответ отправлен!")
+            bot.send_message(MY_ADMIN_ID, "✅ Ваше Величество, ответ успешно доставлен подданному!")
         except Exception as e:
             bot.send_message(MY_ADMIN_ID, f"❌ Ошибка отправки: {e}")
 
@@ -398,12 +351,19 @@ def handle_tiktok(message):
     content_types=['text', 'audio', 'document', 'photo', 'sticker', 'video', 'video_note', 'voice', 'location',
                    'contact'])
 def forward_to_admin(message):
-    if message.from_user.id == MY_ADMIN_ID: return
-
-    if message.text == "✍️ Написать анонимно":
-        bot.send_message(message.chat.id, "Отлично! Отправь мне text или медиафайл прямо сейчас 👇")
+    # Если это сообщение от Вас (админа)
+    if message.from_user.id == MY_ADMIN_ID:
+        if message.text == "✍️ Написать анонимно":
+            bot.send_message(message.chat.id, "Ваше Величество, писать анонимно самому себе не имеет глубокого смысла, но система Вас поняла! 😉")
         return
 
+    # Защитная проверка: если обычный юзер нажал на кнопку из меню, НЕ отправляем её текст анонимно
+    if message.text in ["✍️ Написать анонимно", "🎵 Найти песню", "🔥 Мой рекомендованный трек", "🐱 Котики"]:
+        if message.text == "✍️ Написать анонимно":
+            bot.send_message(message.chat.id, "Отлично! Отправьте мне текст или медиафайл прямо сейчас, и я передам его анонимно 👇")
+        return
+
+    # Если это реальный пост/медиафайл — перенаправляем Вам в админку
     try:
         first_name = message.from_user.first_name or ""
         last_name = message.from_user.last_name or ""
@@ -411,7 +371,7 @@ def forward_to_admin(message):
         username_text = f"🔗 @{message.from_user.username}" if message.from_user.username else "🔗 Скрыт"
         user_message_text = message.text or message.caption or "⚠️ Медиафайл"
 
-        info_text = f"📩 **Новая предложка!**\n\n👤 Имя: {full_name}\n{username_text}\n🆔 ID: `{message.from_user.id}`\n\n📝 **Текст:**\n{user_message_text}"
+        info_text = f"📩 **Ваше Величество, новая предложка!**\n\n👤 Имя: {full_name}\n{username_text}\n🆔 ID: `{message.from_user.id}`\n\n📝 **Текст:**\n{user_message_text}"
         bot.send_message(MY_ADMIN_ID, info_text, parse_mode="Markdown")
         sent_msg = bot.copy_message(chat_id=MY_ADMIN_ID, from_chat_id=message.chat.id, message_id=message.message_id)
         messages_db[sent_msg.message_id] = message.from_user.id
@@ -428,11 +388,9 @@ class SafeHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-type", "text/html; charset=utf-8")
         self.end_headers()
-        # Вместо списка файлов юзер увидит просто красивую плашку
         self.wfile.write("<h1>Бот успешно работает! Проверка портов пройдена.</h1>".encode("utf-8"))
 
     def log_message(self, format, *args):
-        # Отключаем лишний спам логов сервера в консоль Render
         return
 
 
@@ -453,5 +411,5 @@ if __name__ == "__main__":
     threading.Thread(target=run_dummy_server, daemon=True).start()
 
     # 2. Запускаем основного бота
-    print("Бот успешно запущен! Проверяй 'Смефняфку или милоту' и команду /start.")
+    print("Бот успешно запущен для Вашего Величества!")
     bot.infinity_polling(skip_pending=True)
